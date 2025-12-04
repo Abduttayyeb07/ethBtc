@@ -22,6 +22,9 @@ const LOG_CHUNK_CAP = process.env.LOG_CHUNK_CAP
 const FROM_BLOCK = process.env.FROM_BLOCK
   ? parseInt(process.env.FROM_BLOCK, 10)
   : null; // optional global override
+const END_BLOCK_ETH = process.env.END_BLOCK_ETH
+  ? parseInt(process.env.END_BLOCK_ETH, 10)
+  : null;
 const END_BLOCK_BSC = process.env.END_BLOCK_BSC
   ? parseInt(process.env.END_BLOCK_BSC, 10)
   : null;
@@ -34,6 +37,9 @@ const STAKE_TOKEN_DECIMALS = process.env.STAKE_TOKEN_DECIMALS
   ? parseInt(process.env.STAKE_TOKEN_DECIMALS, 10)
   : 18;
 const STAKE_TOKEN_SYMBOL = process.env.STAKE_TOKEN_SYMBOL ?? "ZIG";
+const RUN_ID =
+  process.env.RUN_ID ??
+  new Date().toISOString().replace(/[:.]/g, "-"); // unique per run to avoid overwrites
 
 const SLEEP = ms => new Promise(res => setTimeout(res, ms));
 
@@ -250,6 +256,12 @@ async function scanNetwork(network, abi, ctx) {
       : null) ||
     (FROM_BLOCK !== null ? FROM_BLOCK : null);
 
+  const toBlockExplicit =
+    (network.name === "ethereum" && END_BLOCK_ETH !== null
+      ? END_BLOCK_ETH
+      : null) ||
+    (network.name === "bsc" && END_BLOCK_BSC !== null ? END_BLOCK_BSC : null);
+
   const progress = loadProgress();
   const resumeBlock =
     progress[network.name]?.lastBlock !== undefined
@@ -258,6 +270,7 @@ async function scanNetwork(network, abi, ctx) {
 
   // Prefer resuming progress; fall back to explicit env or 0
   const fromBlock = resumeBlock ?? fromBlockExplicit ?? 0;
+  const toBlock = toBlockExplicit ?? "latest";
 
   let decodedCount = 0;
   let rawCount = 0;
@@ -267,7 +280,7 @@ async function scanNetwork(network, abi, ctx) {
     {
       address: CONTRACT,
       fromBlock,
-      toBlock: "latest"
+      toBlock
     },
     network.name,
     progress,
@@ -378,9 +391,9 @@ async function writeOutputs(
       ...summaryRows
     ];
 
-    fs.writeFileSync(`${net}_output.json`, JSON.stringify(combined, null, 2));
+    fs.writeFileSync(`${net}_output_${RUN_ID}.json`, JSON.stringify(combined, null, 2));
     const csvWriter = createObjectCsvWriter({
-      path: `${net}_output.csv`,
+      path: `${net}_output_${RUN_ID}.csv`,
       header: [
         { id: "type", title: "type" },
         { id: "network", title: "network" },
